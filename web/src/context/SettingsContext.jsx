@@ -10,11 +10,11 @@ export const SettingsProvider = ({ children }) => {
         return !isNaN(parsed) ? parsed : 75;
     });
 
-    // Refresh Interval (ms), default 60000 (1 min)
+    // Refresh Interval (ms), default 120000 (2 mins)
     const [refreshInterval, setRefreshInterval] = useState(() => {
         const saved = localStorage.getItem('refreshInterval');
         const parsed = parseInt(saved, 10);
-        return !isNaN(parsed) ? parsed : 60000;
+        return !isNaN(parsed) ? parsed : 120000;
     });
 
     useEffect(() => {

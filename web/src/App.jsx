@@ -1,12 +1,13 @@
 // Build update: 22/12/2025
 import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Typography, Menu, Spin, Space, notification, Card, Row, Col, Badge, Drawer, Button, ConfigProvider, theme, Avatar, Dropdown, Modal } from 'antd';
-import { DashboardOutlined, TableOutlined, GlobalOutlined, MenuOutlined, EnvironmentOutlined, CheckCircleOutlined, HomeOutlined, SettingOutlined, UserOutlined, LogoutOutlined, IdcardOutlined, BarChartOutlined } from '@ant-design/icons';
+import { DashboardOutlined, TableOutlined, GlobalOutlined, MenuOutlined, EnvironmentOutlined, CheckCircleOutlined, HomeOutlined, SettingOutlined, UserOutlined, LogoutOutlined, IdcardOutlined, BarChartOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import DashboardView from './components/DashboardView';
 import TableView from './components/TableView';
 import AirMap from './components/AirMap';
 import Settings from './components/Settings';
+import FAQView from './components/FAQView';
 import { useLanguage } from './context/LanguageContext';
 import { useTheme } from './context/ThemeContext';
 import { useSettings } from './context/SettingsContext';
@@ -15,13 +16,20 @@ const { Header, Content, Footer } = Layout;
 const { Title, Text } = Typography;
 
 const AirDashboard = () => {
-  const { t } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
   const { isDarkMode } = useTheme();
   const { alertThreshold, refreshInterval } = useSettings();
 
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState('home');
+  const [activeDeviceFilter, setActiveDeviceFilter] = useState('all');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isFaqModalVisible, setIsFaqModalVisible] = useState(false);
+
+  const handleNavigate = (view, filter = 'all') => {
+      setActiveDeviceFilter(filter);
+      setCurrentView(view);
+  };
   const [showHeader, setShowHeader] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -159,8 +167,8 @@ const AirDashboard = () => {
       });
       setDailyStats(dailyStatsArray);
 
-      // --- Helper to calculate Hourly Average ---
-      const calculateHourlyAvg = (data) => {
+      // --- Helper to calculate Average over N hours ---
+      const calculateAvg = (data, hours) => {
         if (!data || data.length === 0) return 0;
 
         const latestInfo = data[data.length - 1];
@@ -172,7 +180,7 @@ const AirDashboard = () => {
         // Note: Months - 1 for Date object
         const latestTime = new Date(year, month - 1, day, hour, minute, second || 0).getTime();
 
-        const oneHourAgo = latestTime - (60 * 60 * 1000);
+        const timeLimit = latestTime - (hours * 60 * 60 * 1000);
 
         let sum = 0;
         let count = 0;
@@ -183,16 +191,13 @@ const AirDashboard = () => {
           const [dHour, dMinute, dSecond] = item.time.split(':');
           const itemTime = new Date(dYear, dMonth - 1, dDay, dHour, dMinute, dSecond || 0).getTime();
 
-          if (itemTime >= oneHourAgo) {
+          if (itemTime >= timeLimit) {
             sum += item.pm25;
             count++;
           } else {
-            // Data is sorted by time, so we can break early if we go past 1 hour ago
-            // However, ensuring we don't break consecutively if order is weird, but typically it's chronological. 
-            // Given file append nature, safe to assume roughly sorted. 
-            // To be safe against minor unordered rows, we could just iterate a bit more or verify sorting, 
-            // but normally appended data is sorted.
-            if (latestTime - itemTime > 2 * 60 * 60 * 1000) break; // Break if > 2 hours gap
+            // Data is sorted by time, so we can break early if we go past the limit limit
+            // To be safe against minor unordered rows, we break if the gap is larger than limit + 2 hours
+            if (latestTime - itemTime > (hours + 2) * 60 * 60 * 1000) break;
           }
         }
 
@@ -217,13 +222,15 @@ const AirDashboard = () => {
         }
       };
 
-      // Attach Hourly Average to Device State
+      // Attach Averages to Device State
       if (latestD1) {
-        latestD1.pm25_hourly_avg = calculateHourlyAvg(d1Data);
+        latestD1.pm25_hourly_avg = calculateAvg(d1Data, 1);
+        latestD1.pm25_daily_avg = calculateAvg(d1Data, 24);
         latestD1.isOffline = isDeviceOffline(latestD1);
       }
       if (latestD2) {
-        latestD2.pm25_hourly_avg = calculateHourlyAvg(d2Data);
+        latestD2.pm25_hourly_avg = calculateAvg(d2Data, 1);
+        latestD2.pm25_daily_avg = calculateAvg(d2Data, 24);
         latestD2.isOffline = isDeviceOffline(latestD2);
       }
 
@@ -340,7 +347,7 @@ const AirDashboard = () => {
 
     switch (currentView) {
       case 'home':
-        return <DashboardView mode="home" device1={device1} device2={device2} historyData={historyData} dailyStats={dailyStats} averagePM25={averagePM25} timeSeriesData={timeSeriesData} />;
+        return <DashboardView mode="home" device1={device1} device2={device2} historyData={historyData} dailyStats={dailyStats} averagePM25={averagePM25} timeSeriesData={timeSeriesData} onNavigate={handleNavigate} />;
       case 'map':
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -356,9 +363,9 @@ const AirDashboard = () => {
           </div>
         );
       case 'dashboard':
-        return <DashboardView mode="dashboard" device1={device1} device2={device2} timeSeriesData={timeSeriesData} averagePM25={averagePM25} dailyStats={dailyStats} currentTime={currentTime} bestLocation={bestLocation} />;
+        return <DashboardView mode="dashboard" device1={device1} device2={device2} timeSeriesData={timeSeriesData} averagePM25={averagePM25} dailyStats={dailyStats} currentTime={currentTime} bestLocation={bestLocation} initialDeviceFilter={activeDeviceFilter} />;
       case 'table':
-        return <TableView data={historyData} onSettingsClick={() => setCurrentView('settings')} />;
+        return <TableView data={historyData} onSettingsClick={() => handleNavigate('settings')} />;
       case 'settings':
         return <Settings />;
       default:
@@ -398,7 +405,7 @@ const AirDashboard = () => {
           <div
             className="clickable-brand"
             style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-            onClick={() => setCurrentView('home')}
+            onClick={() => handleNavigate('home')}
           >
             <img
               src="/sut_logo.png"
@@ -423,7 +430,7 @@ const AirDashboard = () => {
               className="transparent-menu"
               selectedKeys={[currentView]}
               items={navItems}
-              onSelect={({ key }) => setCurrentView(key)}
+              onSelect={({ key }) => handleNavigate(key)}
               style={{ width: '100%', justifyContent: 'flex-end', borderBottom: 'none', fontFamily: 'Anakotmai, sans-serif' }}
               disabledOverflow={true}
             />
@@ -434,7 +441,20 @@ const AirDashboard = () => {
           {/* Time Removed as requested */}
 
           <div style={{ marginLeft: '16px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-            <Button type="text" icon={<SettingOutlined style={{ fontSize: '20px', color: 'white' }} />} onClick={() => setCurrentView('settings')} />
+            <Button
+              type="text"
+              onClick={() => setIsFaqModalVisible(!isFaqModalVisible)}
+              style={{ color: 'white', marginRight: '4px', padding: '4px 8px' }}
+              icon={<QuestionCircleOutlined style={{ fontSize: '20px' }} />}
+            />
+            <Button 
+              type="text" 
+              onClick={() => setLanguage(language === 'th' ? 'en' : 'th')} 
+              style={{ color: 'white', fontWeight: 'bold', marginRight: '8px' }}
+            >
+              {language === 'th' ? 'EN' : 'TH'}
+            </Button>
+            <Button className="desktop-visible" type="text" icon={<SettingOutlined style={{ fontSize: '20px', color: 'white' }} />} onClick={() => handleNavigate('settings')} />
           </div>
 
         </Header>
@@ -452,7 +472,7 @@ const AirDashboard = () => {
             selectedKeys={[currentView]}
             items={navItems}
             onSelect={({ key }) => {
-              setCurrentView(key);
+              handleNavigate(key);
               setMobileMenuOpen(false);
             }}
             style={{ fontFamily: 'Kanit, sans-serif', borderRight: 'none' }}
@@ -519,31 +539,44 @@ const AirDashboard = () => {
              .nav-item { color: #8c8c8c; }
            `}</style>
 
-          <div onClick={() => setCurrentView('home')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', height: '100%', justifyContent: 'center' }} className={currentView === 'home' ? 'nav-item-active' : 'nav-item'}>
+          <div onClick={() => handleNavigate('home')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', height: '100%', justifyContent: 'center' }} className={currentView === 'home' ? 'nav-item-active' : 'nav-item'}>
             <HomeOutlined style={{ fontSize: '24px' }} />
             <span style={{ fontSize: '10px', marginTop: '2px', fontFamily: 'Kanit' }}>{t.home || 'Home'}</span>
           </div>
 
-          <div onClick={() => setCurrentView('dashboard')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', height: '100%', justifyContent: 'center' }} className={currentView === 'dashboard' ? 'nav-item-active' : 'nav-item'}>
+          <div onClick={() => handleNavigate('dashboard')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', height: '100%', justifyContent: 'center' }} className={currentView === 'dashboard' ? 'nav-item-active' : 'nav-item'}>
             <BarChartOutlined style={{ fontSize: '24px' }} />
             <span style={{ fontSize: '10px', marginTop: '2px', fontFamily: 'Kanit' }}>{t.dashboard || 'Dashboard'}</span>
           </div>
 
-          <div onClick={() => setCurrentView('map')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', height: '100%', justifyContent: 'center' }} className={currentView === 'map' ? 'nav-item-active' : 'nav-item'}>
+          <div onClick={() => handleNavigate('map')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', height: '100%', justifyContent: 'center' }} className={currentView === 'map' ? 'nav-item-active' : 'nav-item'}>
             <EnvironmentOutlined style={{ fontSize: '24px' }} />
             <span style={{ fontSize: '10px', marginTop: '2px', fontFamily: 'Kanit' }}>{t.map || 'Map'}</span>
           </div>
 
-          <div onClick={() => setCurrentView('settings')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', height: '100%', justifyContent: 'center' }} className={currentView === 'settings' ? 'nav-item-active' : 'nav-item'}>
+          <div onClick={() => handleNavigate('settings')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', height: '100%', justifyContent: 'center' }} className={currentView === 'settings' ? 'nav-item-active' : 'nav-item'}>
             <SettingOutlined style={{ fontSize: '24px' }} />
             <span style={{ fontSize: '10px', marginTop: '2px', fontFamily: 'Kanit' }}>{t.settings || 'Settings'}</span>
           </div>
         </div>
 
-        <Footer style={{ textAlign: 'center', padding: '20px 10px', fontFamily: 'Kanit, sans-serif', paddingBottom: '80px' }}>
-          © 2025 SUT Air Dashboard
+        <Footer style={{ textAlign: 'center', padding: '20px 10px', fontFamily: 'Kanit, sans-serif', paddingBottom: '80px', color: '#8c8c8c' }}>
+          <div>© 2025 SUT Air Dashboard</div>
+          <div style={{ fontSize: '12px', marginTop: '4px' }}>Version 1.0.0</div>
         </Footer>
       </Layout>
+
+      <Modal
+        open={isFaqModalVisible}
+        onCancel={() => setIsFaqModalVisible(false)}
+        footer={null}
+        width={700}
+        centered
+        bodyStyle={{ padding: '24px' }}
+      >
+        <FAQView />
+      </Modal>
+
     </ConfigProvider>
   );
 };

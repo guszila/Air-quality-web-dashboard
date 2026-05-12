@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
-import { Card, Row, Col, Typography, Progress, Divider, Table, Tag, Radio, Checkbox, Space } from 'antd';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, LabelList, ComposedChart, Area } from 'recharts';
+import { Card, Row, Col, Typography, Progress, Divider, Table, Tag, Radio, Checkbox, Space, Modal } from 'antd';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, LabelList, ComposedChart, Area, AreaChart } from 'recharts';
 
 import { EnvironmentOutlined } from '@ant-design/icons';
 import { FireFilled, CloudFilled, SmileFilled, MehFilled, FrownFilled } from '@ant-design/icons';
@@ -42,11 +42,11 @@ const HealthAdvisoryCard = ({ pm25 }) => {
     );
 };
 
-const StatusSection = ({ title, data }) => {
+const StatusSection = ({ title, data, onClick }) => {
     const { t } = useLanguage();
-    const { pm25, pm25_hourly_avg, temp, humidity, date, time } = data || {};
+    const { pm25, pm25_hourly_avg, pm25_daily_avg, temp, humidity, date, time } = data || {};
 
-    const displayPM25 = pm25_hourly_avg !== undefined ? pm25_hourly_avg : pm25;
+    const displayPM25 = pm25; // Main display is real-time value
 
     const getStatus = (val) => {
         if (val === undefined || val === null) return { color: '#d9d9d9', text: 'No Data' };
@@ -61,22 +61,26 @@ const StatusSection = ({ title, data }) => {
 
     return (
         <Card
+            hoverable={!!onClick}
+            onClick={onClick}
             title={
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Title level={4} style={{ margin: 0, fontFamily: 'Kanit, sans-serif', fontSize: '1.2rem' }}>{title}</Title>
+                        <Title level={4} style={{ margin: 0, fontFamily: 'Kanit, sans-serif' }}>{title}</Title>
                         {data && (
                             <Tag color={data.isOffline ? 'red' : 'green'} style={{ marginRight: 0 }}>
-                                {data.isOffline ? t.offline : t.online}
+                                {data.isOffline ? t.offline || 'Offline' : t.online || 'Online'}
                             </Tag>
                         )}
                     </div>
-                    <Text type="secondary" style={{ fontSize: '12px', fontFamily: 'Kanit, sans-serif' }}>
-                        {data ? `${t.lastUpdateLabel} ${date} ${time}` : ''}
-                    </Text>
+                    {date && time && (
+                        <Text type="secondary" style={{ fontSize: '12px', fontFamily: 'Kanit, sans-serif' }}>
+                            {t.lastUpdate}: {date} {time}
+                        </Text>
+                    )}
                 </div>
             }
-            style={{ borderRadius: '15px', marginBottom: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
+            style={{ borderRadius: '15px', marginBottom: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', cursor: onClick ? 'pointer' : 'default' }}
             bodyStyle={{ padding: '12px' }}
         >
             <Row gutter={[8, 8]} justify="center">
@@ -84,7 +88,7 @@ const StatusSection = ({ title, data }) => {
                 <Col xs={24} sm={8}>
                     <Card hoverable bordered={false} style={{ textAlign: 'center', background: 'transparent', boxShadow: 'none' }} bodyStyle={{ padding: '0px' }}>
                         <Title level={5} style={{ fontFamily: 'Kanit, sans-serif', marginBottom: '5px' }}>
-                            {t.pm25Value} <span style={{ fontSize: '10px', color: '#8c8c8c' }}>(เฉลี่ย 24 ชม.)</span>
+                            {t.pm25Value} <span style={{ fontSize: '10px', color: '#8c8c8c' }}>({t.current})</span>
                         </Title>
                         <Progress
                             type="dashboard"
@@ -103,6 +107,20 @@ const StatusSection = ({ title, data }) => {
                             <Text strong style={{ fontSize: '14px', color: currentStatus.color, fontFamily: 'Kanit, sans-serif' }}>
                                 {currentStatus.text}
                             </Text>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '10px' }}>
+                            <div>
+                                <div style={{ fontSize: '11px', color: '#8c8c8c', fontFamily: 'Kanit, sans-serif' }}>{t.avg1h}</div>
+                                <div style={{ fontSize: '14px', fontWeight: 'bold', color: getStatus(pm25_hourly_avg).color, fontFamily: 'Kanit, sans-serif' }}>
+                                    {pm25_hourly_avg !== undefined ? pm25_hourly_avg : '-'}
+                                </div>
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '11px', color: '#8c8c8c', fontFamily: 'Kanit, sans-serif' }}>{t.avg24h}</div>
+                                <div style={{ fontSize: '14px', fontWeight: 'bold', color: getStatus(pm25_daily_avg).color, fontFamily: 'Kanit, sans-serif' }}>
+                                    {pm25_daily_avg !== undefined ? pm25_daily_avg : '-'}
+                                </div>
+                            </div>
                         </div>
                     </Card>
                 </Col>
@@ -275,7 +293,7 @@ const AirQualityReferenceTable = () => {
     );
 };
 
-const DashboardView = ({ device1, device2, historyData, dailyStats, timeSeriesData, averagePM25, mode = 'home', currentTime, bestLocation }) => {
+const DashboardView = ({ device1, device2, historyData, dailyStats, timeSeriesData, averagePM25, mode = 'home', currentTime, bestLocation, onNavigate, initialDeviceFilter, isModalMode = false }) => {
     const { t } = useLanguage();
 
     // Prepare data for the single-stream chart (Last 20 readings)
@@ -292,6 +310,29 @@ const DashboardView = ({ device1, device2, historyData, dailyStats, timeSeriesDa
     const [showDevice1, setShowDevice1] = useState(true);
     const [showDevice2, setShowDevice2] = useState(true);
 
+    const [isModalVisible, setIsModalVisible] = useState(false);
+    const [modalDeviceFilter, setModalDeviceFilter] = useState('device1');
+
+    const handleCardClick = (device) => {
+        setModalDeviceFilter(device);
+        setIsModalVisible(true);
+    };
+
+    useEffect(() => {
+        if (mode === 'dashboard') {
+            if (initialDeviceFilter === 'device1') {
+                setShowDevice1(true);
+                setShowDevice2(false);
+            } else if (initialDeviceFilter === 'device2') {
+                setShowDevice1(false);
+                setShowDevice2(true);
+            } else {
+                setShowDevice1(true);
+                setShowDevice2(true);
+            }
+        }
+    }, [initialDeviceFilter, mode]);
+
     // Filter daily stats based on selection
     const filteredDailyStats = dailyStats ? dailyStats.slice(daysRange === '7' ? -7 : -30) : [];
 
@@ -302,8 +343,8 @@ const DashboardView = ({ device1, device2, historyData, dailyStats, timeSeriesDa
                 <>
                     <HealthAdvisoryCard pm25={averagePM25} />
 
-                    <StatusSection title={t.learningBuilding} data={device1} />
-                    <StatusSection title={t.library} data={device2} />
+                    <StatusSection title={t.learningBuilding} data={device1} onClick={() => handleCardClick('device1')} />
+                    <StatusSection title={t.library} data={device2} onClick={() => handleCardClick('device2')} />
 
                     <Row gutter={[16, 16]}>
                         <Col xs={24} lg={24}>
@@ -313,12 +354,65 @@ const DashboardView = ({ device1, device2, historyData, dailyStats, timeSeriesDa
                     </Row>
 
                     <AirQualityReferenceTable />
+
+                    <Modal
+                        title={
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <EnvironmentOutlined style={{ color: '#f97316' }} />
+                                <span style={{ fontFamily: 'Kanit, sans-serif', fontSize: '1.2rem', margin: 0 }}>
+                                    {modalDeviceFilter === 'device1' ? t.learningBuilding : t.library}
+                                </span>
+                            </div>
+                        }
+                        open={isModalVisible}
+                        onCancel={() => setIsModalVisible(false)}
+                        footer={null}
+                        width={600}
+                        centered
+                        bodyStyle={{ padding: '20px' }}
+                    >
+                        {(() => {
+                            const deviceData = modalDeviceFilter === 'device1' ? device1 : device2;
+                            const pmKey = modalDeviceFilter === 'device1' ? 'pm25_A' : 'pm25_B';
+                            const pm25Value = deviceData?.pm25_hourly_avg !== undefined ? deviceData?.pm25_hourly_avg : deviceData?.pm25;
+                            const deviceColor = modalDeviceFilter === 'device1' ? '#1677ff' : '#fa8c16';
+
+                            return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                    <HealthAdvisoryCard pm25={pm25Value} />
+                                    
+                                    <Card size="small" title={<span style={{ fontFamily: 'Kanit, sans-serif' }}>{t.pm25Trend || 'PM2.5 Trend'}</span>} bordered={false} style={{ background: '#f5f5f5', borderRadius: '12px' }}>
+                                        <div style={{ width: '100%', height: 250 }}>
+                                            <ResponsiveContainer>
+                                                <AreaChart data={timeSeriesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                                    <defs>
+                                                        <linearGradient id={`colorPv_${modalDeviceFilter}`} x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor={deviceColor} stopOpacity={0.4}/>
+                                                            <stop offset="95%" stopColor={deviceColor} stopOpacity={0}/>
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                                                    <XAxis dataKey="time" tick={{ fontSize: 12, fontFamily: 'Kanit' }} axisLine={false} tickLine={false} />
+                                                    <YAxis tick={{ fontSize: 12, fontFamily: 'Kanit' }} axisLine={false} tickLine={false} />
+                                                    <Tooltip 
+                                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', fontFamily: 'Kanit' }}
+                                                    />
+                                                    <Area type="monotone" dataKey={pmKey} name="PM2.5" stroke={deviceColor} strokeWidth={3} fillOpacity={1} fill={`url(#colorPv_${modalDeviceFilter})`} />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </Card>
+                                </div>
+                            );
+                        })()}
+                    </Modal>
                 </>
             )}
 
             {mode === 'dashboard' && (
                 <>
-                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+                    {!isModalMode && (
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
                         <Card size="small" style={{ borderRadius: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
                             <Space size="large">
                                 <Checkbox checked={showDevice1} onChange={(e) => setShowDevice1(e.target.checked)}>
@@ -329,10 +423,11 @@ const DashboardView = ({ device1, device2, historyData, dailyStats, timeSeriesDa
                                 </Checkbox>
                             </Space>
                         </Card>
-                    </div>
+                        </div>
+                    )}
 
                     <Row gutter={[16, 16]}>
-                        <Col xs={{ span: 24, order: 2 }} lg={{ span: 12, order: 1 }}>
+                        <Col xs={{ span: 24, order: 2 }} lg={{ span: isModalMode ? 24 : 12, order: 1 }}>
                             <Card title={<span style={{ fontFamily: 'Kanit, sans-serif' }}>{t.trend}</span>} style={{ borderRadius: '15px' }}>
                                 <div style={{ width: '100%', height: 300 }}>
                                     <ResponsiveContainer>
@@ -353,7 +448,8 @@ const DashboardView = ({ device1, device2, historyData, dailyStats, timeSeriesDa
                             </Card>
                         </Col>
 
-                        <Col xs={{ span: 24, order: 1 }} lg={{ span: 12, order: 2 }}>
+                        {!isModalMode && (
+                            <Col xs={{ span: 24, order: 1 }} lg={{ span: 12, order: 2 }}>
                             <Card title={<span style={{ fontFamily: 'Kanit, sans-serif' }}>{t.summary || "System Summary"}</span>} style={{ borderRadius: '15px', height: '100%' }}>
                                 <div style={{ textAlign: 'center', padding: '20px 0', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
                                     <div style={{ fontFamily: 'Kanit, sans-serif' }}>
@@ -385,6 +481,7 @@ const DashboardView = ({ device1, device2, historyData, dailyStats, timeSeriesDa
                                 </div>
                             </Card>
                         </Col>
+                        )}
                     </Row>
 
 
@@ -394,38 +491,53 @@ const DashboardView = ({ device1, device2, historyData, dailyStats, timeSeriesDa
 
 
                         <Col xs={24} lg={12}>
-                            <Card title={<span style={{ fontFamily: 'Kanit, sans-serif' }}>Temperature & Humidity Trends</span>} style={{ borderRadius: '15px' }}>
+                            <Card title={<span style={{ fontFamily: 'Kanit, sans-serif' }}>Temperature Trends</span>} style={{ borderRadius: '15px' }}>
                                 <div style={{ width: '100%', height: 300 }}>
                                     <ResponsiveContainer>
-                                        <ComposedChart data={timeSeriesData}>
+                                        <LineChart data={timeSeriesData}>
                                             <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.4} vertical={false} />
                                             <XAxis dataKey="time" style={{ fontFamily: 'Kanit, sans-serif' }} axisLine={false} tickLine={false} />
-                                            <YAxis yAxisId="left" orientation="left" stroke="#f5222d" label={{ value: 'Temp (°C)', angle: -90, position: 'insideLeft' }} axisLine={false} tickLine={false} />
-                                            <YAxis yAxisId="right" orientation="right" stroke="#13c2c2" label={{ value: 'Humidity (%)', angle: 90, position: 'insideRight' }} axisLine={false} tickLine={false} />
+                                            <YAxis label={{ value: 'Temp (°C)', angle: -90, position: 'insideLeft' }} axisLine={false} tickLine={false} />
                                             <Tooltip contentStyle={{ borderRadius: '10px', fontFamily: 'Kanit', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} labelStyle={{ fontWeight: 'bold' }} />
                                             <Legend wrapperStyle={{ fontFamily: 'Kanit, sans-serif' }} />
-                                            {showDevice1 && <Line yAxisId="left" type="monotone" dataKey="temp_A" name={`Temp (${t.learningBuilding})`} stroke="#f5222d" dot={false} strokeWidth={3} />}
-                                            {showDevice1 && <Line yAxisId="right" type="monotone" dataKey="humid_A" name={`Humid (${t.learningBuilding})`} stroke="#13c2c2" dot={false} strokeWidth={3} />}
-                                            {showDevice2 && <Line yAxisId="left" type="monotone" dataKey="temp_B" name={`Temp (${t.library})`} stroke="#ff7875" dot={false} strokeWidth={3} strokeDasharray="7 7" />}
-                                            {showDevice2 && <Line yAxisId="right" type="monotone" dataKey="humid_B" name={`Humid (${t.library})`} stroke="#87e8e8" dot={false} strokeWidth={3} strokeDasharray="7 7" />}
-                                        </ComposedChart>
+                                            {showDevice1 && <Line type="monotone" dataKey="temp_A" name={`Temp (${t.learningBuilding})`} stroke="#f5222d" dot={false} strokeWidth={3} />}
+                                            {showDevice2 && <Line type="monotone" dataKey="temp_B" name={`Temp (${t.library})`} stroke="#fa8c16" dot={false} strokeWidth={3} />}
+                                        </LineChart>
                                     </ResponsiveContainer>
                                 </div>
                             </Card>
                         </Col>
 
                         <Col xs={24} lg={12}>
+                            <Card title={<span style={{ fontFamily: 'Kanit, sans-serif' }}>Humidity Trends</span>} style={{ borderRadius: '15px' }}>
+                                <div style={{ width: '100%', height: 300 }}>
+                                    <ResponsiveContainer>
+                                        <LineChart data={timeSeriesData}>
+                                            <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.4} vertical={false} />
+                                            <XAxis dataKey="time" style={{ fontFamily: 'Kanit, sans-serif' }} axisLine={false} tickLine={false} />
+                                            <YAxis label={{ value: 'Humidity (%)', angle: -90, position: 'insideLeft' }} axisLine={false} tickLine={false} />
+                                            <Tooltip contentStyle={{ borderRadius: '10px', fontFamily: 'Kanit', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} labelStyle={{ fontWeight: 'bold' }} />
+                                            <Legend wrapperStyle={{ fontFamily: 'Kanit, sans-serif' }} />
+                                            {showDevice1 && <Line type="monotone" dataKey="humid_A" name={`Humid (${t.learningBuilding})`} stroke="#1677ff" dot={false} strokeWidth={3} />}
+                                            {showDevice2 && <Line type="monotone" dataKey="humid_B" name={`Humid (${t.library})`} stroke="#13c2c2" dot={false} strokeWidth={3} />}
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </Card>
+                        </Col>
+
+                        <Col xs={24} lg={24}>
                             <Card title={<span style={{ fontFamily: 'Kanit, sans-serif' }}>PM10 Trends</span>} style={{ borderRadius: '15px' }}>
                                 <div style={{ width: '100%', height: 300 }}>
                                     <ResponsiveContainer>
                                         <LineChart data={timeSeriesData}>
                                             <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.4} vertical={false} />
                                             <XAxis dataKey="time" style={{ fontFamily: 'Kanit, sans-serif' }} axisLine={false} tickLine={false} />
-                                            <YAxis stroke="#52c41a" label={{ value: 'PM10 (µg/m³)', angle: -90, position: 'insideLeft' }} axisLine={false} tickLine={false} />
+                                            <YAxis label={{ value: 'PM10 (µg/m³)', angle: -90, position: 'insideLeft' }} axisLine={false} tickLine={false} />
                                             <Tooltip contentStyle={{ borderRadius: '10px', fontFamily: 'Kanit', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} labelStyle={{ fontWeight: 'bold' }} />
                                             <Legend wrapperStyle={{ fontFamily: 'Kanit, sans-serif' }} />
-                                            {showDevice1 && <Line type="monotone" dataKey="pm10_A" name={`PM10 (${t.learningBuilding})`} stroke="#52c41a" dot={false} activeDot={{ r: 8, strokeWidth: 0 }} strokeWidth={3} />}
-                                            {showDevice2 && <Line type="monotone" dataKey="pm10_B" name={`PM10 (${t.library})`} stroke="#b7eb8f" dot={false} activeDot={{ r: 8, strokeWidth: 0 }} strokeWidth={3} strokeDasharray="7 7" />}
+                                            {showDevice1 && <Line type="monotone" dataKey="pm10_A" name={`PM10 (${t.learningBuilding})`} stroke="#1677ff" dot={false} activeDot={{ r: 8, strokeWidth: 0 }} strokeWidth={3} />}
+                                            {showDevice2 && <Line type="monotone" dataKey="pm10_B" name={`PM10 (${t.library})`} stroke="#fa8c16" dot={false} activeDot={{ r: 8, strokeWidth: 0 }} strokeWidth={3} />}
                                         </LineChart>
                                     </ResponsiveContainer>
                                 </div>
