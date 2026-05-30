@@ -6,7 +6,7 @@
 
 > [!IMPORTANT]
 **ข้อควรระวังเรื่องความปลอดภัย:**
-โค้ดไฟล์ `SAQ_AppScript.js` อย่าลืมกรอก Line Token `"YOUR_LINE_CHANNEL_ACCESS_TOKEN"`
+โค้ดไฟล์ `SAQ_AppScript.js` อย่าลืมกรอก Line Token `"YOUR_LINE_CHANNEL_ACCESS_TOKEN"` และไม่ควรแบ่งปัน Line Token ให้ใคร
 
 ###  ฟีเจอร์หลัก (Key Features)
 
