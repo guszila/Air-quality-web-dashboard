@@ -1,6 +1,6 @@
 // ========== CONFIG ==========
 const LOC_SHEET_NAME = "Device_Locations";
-const CHANNEL_ACCESS_TOKEN = "/9/5+tmTFZb0ic6tLLUgkbpyHdYBE1ZpUzMQoJzyVx9W6m+5eeuHwtGYnnRT21OBXuqrO+MrMY6NCM1odCYP89TY6JiGuXtq6zh3ZrHygrW69mf9rXGbRwQbbSYn9mu9geLMNFtn6gJNfzLZSEWMFQdB04t89/1O/w1cDnyilFU=";
+const CHANNEL_ACCESS_TOKEN = "";
 const MAX_SERVICE_DISTANCE = 5000; // meters
 
 // =====================================================
