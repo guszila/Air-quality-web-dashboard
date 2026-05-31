@@ -46,24 +46,34 @@
 
 ## วิธีการติดตั้งและรันโปรเจกต์ (Installation & Running)
 
-1. **เข้าไปยังโฟลเดอร์ของโปรเจกต์:**
-   เปิด Terminal หรือ Command Prompt แล้วเข้าไปยังโฟลเดอร์โปรเจกต์ (`web`)
+1. **โคลนโปรเจกต์จาก Git:**
+  เปิด Terminal หรือ Command Prompt แล้วรันคำสั่งด้านล่างเพื่อดาวน์โหลดซอร์สโค้ด
    ```bash
-   cd d:\Desktop\FocusPanudetFolder\Y3_2_2568\Project_AirQuality\webApp_AirQuality_Mapping\web
+   git clone https://github.com/guszila/Air-quality-web-dashboard.git
    ```
+> [!TIP]
+  > (สามารถเลือกที่เก็บไฟล์ที่ได้จากการโคลน Repo ได้เลยครับ)
 
-2. **ติดตั้ง Dependencies ทั้งหมด:**
+2. **เข้าไปยังโฟลเดอร์ของโปรเจกต์:**
+   ย้ายเข้าไปยังโฟลเดอร์ (`web`) ของโปรเจกต์ที่เพิ่งโคลนมา
+   ```bash
+   cd Air-quality-web-dashboard/web
+   ```
+> [!TIP]
+  > (โดยวิธีเข้า (`cd`) /ตามด้วย Path ที่ตั้งของ Repo ที่เลือกไว้และตามด้วย (`Air-quality-web-dashboard/web`))
+
+3. **ติดตั้ง Dependencies ทั้งหมด:**
    รันคำสั่งด้านล่างเพื่อติดตั้งแพ็กเกจที่จำเป็นทั้งหมด
    ```bash
    npm install
    ```
 
-3. **รัน Development Server เพื่อทดสอบ:**
+4. **รัน Development Server เพื่อทดสอบ:**
    ```bash
    npm run dev
    ```
 
-4. **เปิดใช้งานบนเบราว์เซอร์:**
+5. **เปิดใช้งานบนเบราว์เซอร์:**
    เมื่อรันคำสั่งเสร็จแล้ว Terminal จะแสดง URL (ปกติจะเป็น `http://localhost:5173`) ให้คลิกหรือคัดลอก URL ไปเปิดในเว็บเบราว์เซอร์เพื่อใช้งานแอปพลิเคชัน
 
 ## คำสั่งอื่นๆ (Available Scripts)
